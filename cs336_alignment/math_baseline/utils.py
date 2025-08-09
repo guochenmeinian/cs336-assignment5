@@ -1,28 +1,14 @@
 #!/usr/bin/env python3
-"""
-Utilities for the math_baseline problem.
-Includes:
-- load_gsm8k_data
-- load_r1_zero_prompt
-- format_r1_zero_prompt
-- evaluate_vllm
-"""
 from __future__ import annotations
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from vllm import LLM, SamplingParams
 
 logger = logging.getLogger(__name__)
-
-
-def _project_root() -> Path:
-    # scripts/math_baseline/utils.py -> project root is parents[2]
-    return Path(__file__).resolve().parents[2]
 
 
 def load_gsm8k_data(data_path: str) -> List[Dict]:
@@ -40,7 +26,7 @@ def load_gsm8k_data(data_path: str) -> List[Dict]:
 
 def load_r1_zero_prompt() -> str:
     """Load r1_zero prompt template from cs336_alignment/prompts/r1_zero.prompt."""
-    prompt_path = _project_root() / "cs336_alignment" / "prompts" / "r1_zero.prompt"
+    prompt_path = Path(__file__).resolve().parents[1] / "prompts" / "r1_zero.prompt"
     if not prompt_path.exists():
         logger.warning("r1_zero prompt not found at %s; using fallback template", prompt_path)
         return (

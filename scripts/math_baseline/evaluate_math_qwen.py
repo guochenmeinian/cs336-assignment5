@@ -21,8 +21,8 @@ from vllm import LLM, SamplingParams
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.append(str(PROJECT_ROOT))
 
-# Problem-local utils
-from scripts.math_baseline.utils import (
+# Import reusable code from the package
+from cs336_alignment.math_baseline import (
     evaluate_vllm,
     format_r1_zero_prompt,
     load_gsm8k_data,
