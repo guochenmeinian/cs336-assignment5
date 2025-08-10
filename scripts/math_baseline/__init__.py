@@ -1,1 +1,0 @@
-# Intentionally empty: scripts here are thin CLI wrappers calling cs336_alignment.math_baseline
