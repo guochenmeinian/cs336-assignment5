@@ -8,16 +8,17 @@ import logging
 from typing import Callable, Dict, List
 
 from vllm import LLM, SamplingParams
+from .drgrpo_grader import r1_zero_reward_fn
 
 logger = logging.getLogger(__name__)
 
 
 def evaluate_vllm(
     vllm_model: LLM,
-    reward_fn: Callable[[str, str], Dict[str, float]],
     prompts: List[str],
     eval_sampling_params: SamplingParams,
     ground_truths: List[str] = None,
+    reward_fn: Callable[[str, str], Dict[str, float]] = None,
     output_path: str = None
 ) -> List[Dict]:
     """
@@ -28,6 +29,11 @@ def evaluate_vllm(
     if ground_truths is None:
         logger.error("ground_truths must be provided for evaluation")
         return []
+    
+    # Use r1_zero_reward_fn as default for MATH evaluation
+    if reward_fn is None:
+        reward_fn = r1_zero_reward_fn
+        logger.info("Using default r1_zero_reward_fn for MATH evaluation")
     
     assert len(prompts) == len(ground_truths)
     
@@ -106,6 +112,46 @@ def load_model(model_name: str = "qwen_math_15b"):
     except Exception as e:
         logger.error(f"Failed to load model {model_name}: {e}")
         raise
+
+
+def create_math_eval_sampling_params():
+    """Create sampling parameters optimized for MATH evaluation."""
+    from .config import DEFAULT_EVAL_SAMPLING_PARAMS
+    
+    sampling_params = SamplingParams(
+        temperature=DEFAULT_EVAL_SAMPLING_PARAMS["temperature"],
+        top_p=DEFAULT_EVAL_SAMPLING_PARAMS["top_p"],
+        max_tokens=DEFAULT_EVAL_SAMPLING_PARAMS["max_tokens"],
+        stop=DEFAULT_EVAL_SAMPLING_PARAMS["stop"],
+        include_stop_str_in_output=DEFAULT_EVAL_SAMPLING_PARAMS["include_stop_str_in_output"],
+    )
+    
+    logger.info("Created MATH evaluation sampling parameters with </answer> stop token")
+    return sampling_params
+
+
+def evaluate_math(
+    vllm_model: LLM,
+    prompts: List[str],
+    ground_truths: List[str],
+    output_path: str = None
+) -> List[Dict]:
+    """
+    Evaluate a language model on MATH problems using r1_zero_reward_fn.
+    
+    This function automatically uses the correct sampling parameters and reward function
+    for MATH evaluation as specified in the assignment.
+    """
+    sampling_params = create_math_eval_sampling_params()
+    
+    return evaluate_vllm(
+        vllm_model=vllm_model,
+        prompts=prompts,
+        eval_sampling_params=sampling_params,
+        ground_truths=ground_truths,
+        reward_fn=r1_zero_reward_fn,  # Use the specified reward function
+        output_path=output_path
+    )
 
 
 def compute_metrics(results: List[Dict]) -> Dict[str, float]:

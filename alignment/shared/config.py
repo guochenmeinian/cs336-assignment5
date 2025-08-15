@@ -37,18 +37,18 @@ MODEL_CONFIGS = {
         "path": QWEN_MATH_15B_PATH,
         "trust_remote_code": True,
         "dtype": "bfloat16",
-        "gpu_memory_utilization": 0.9,
+        "gpu_memory_utilization": 0.5, # 4090D can only handle ~0.5
     },
     "llama_31_8b": {
         "path": LLAMA_31_8B_PATH,
         "trust_remote_code": True,
         "dtype": "bfloat16",
-        "gpu_memory_utilization": 0.9,
+        "gpu_memory_utilization": 0.7,
     },
     "llama_33_70b_instruct": {
         "path": LLAMA_33_70B_INSTRUCT_PATH,
         "trust_remote_code": True,
         "dtype": "bfloat16",
-        "gpu_memory_utilization": 0.9,
+        "gpu_memory_utilization": 0.7,
     },
 }

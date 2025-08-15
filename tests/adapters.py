@@ -56,13 +56,18 @@ def run_tokenize_prompt_and_output(
         ids_padded = ids + [tokenizer.pad_token_id] * pad_len
         # Shifted labels (next token prediction)
         labels_padded = ids_padded[1:] + [tokenizer.pad_token_id]
-        # Mask: 1 for output tokens, 0 for prompt/padding
-        mask = [0] * len(pt) + [1] * len(ot) + [0] * pad_len
+
+        # align mask and labels：len(pt)-1 set as True
+        mask_for_labels = (
+            [False] * max(len(pt) - 1, 0) +
+            [True]  * len(ot) +
+            [False] * (pad_len + 1)
+        )
     
         # Remove last token for input_ids, labels, mask
         input_ids.append(torch.tensor(ids_padded[:-1]))
         labels.append(torch.tensor(labels_padded[:-1]))
-        response_mask.append(torch.tensor(mask[:-1]))
+        response_mask.append(torch.tensor(mask_for_labels[:-1], dtype=torch.bool))
 
     return {
         "input_ids": torch.stack(input_ids),
@@ -351,17 +356,26 @@ def run_sft_microbatch_train_step(
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """Compute the policy gradient loss and backprop its gradients for a microbatch.
     """
-    # Negative log-likelihood over response tokens, normalized by a constant
-    per_token_loss = -policy_log_probs
-    loss = run_masked_normalize(
-        tensor=per_token_loss,
-        mask=response_mask.to(dtype=policy_log_probs.dtype),
-        dim=None,
-        normalize_constant=float(normalize_constant) if normalize_constant is not None else 1.0,
-    )
-    loss = loss / float(gradient_accumulation_steps)
+    # Negative log-likelihood over response tokens
+    masked_loss = -policy_log_probs * response_mask
+
+    numerator = masked_loss.sum()
+    batch_size = policy_log_probs.size(0)
+    denom = gradient_accumulation_steps * batch_size * normalize_constant
+
+    loss = numerator / denom
+
     loss.backward()
-    return loss.detach(), {}
+
+    # 可回传一些元信息便于监控
+    meta = {
+        "masked_sum": numerator.detach(),
+        "batch_size": torch.tensor(batch_size, dtype=policy_log_probs.dtype),
+        "ga_steps": torch.tensor(gradient_accumulation_steps, dtype=policy_log_probs.dtype),
+        "normalize_constant": torch.tensor(normalize_constant, dtype=policy_log_probs.dtype),
+        "num_response_tokens": response_mask.sum().to(policy_log_probs.dtype),
+    }
+    return loss.detach(), meta
 
     
 def run_grpo_microbatch_train_step(

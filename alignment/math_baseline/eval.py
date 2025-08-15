@@ -13,10 +13,10 @@ This script implements the requirements from the assignment:
 import logging
 from pathlib import Path
 
-from ..shared.evaluation_utils import evaluate_vllm, load_model
+from ..shared.math_evaluation_utils import evaluate_vllm, load_model
 from ..shared.config import RESULTS_DIR, GSM8K_VALIDATION_PATH, DEFAULT_EVAL_SAMPLING_PARAMS
-from .utils import load_gsm8k_data, format_r1_zero_prompt
-from ..drgrpo_grader import r1_zero_reward_fn
+from ..shared.math_data_utils import load_gsm8k_data, format_r1_zero_prompt
+from ..shared.drgrpo_grader import r1_zero_reward_fn
 
 # Configure logging
 logging.basicConfig(
