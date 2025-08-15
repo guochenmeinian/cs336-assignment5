@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to analyze GSM8K evaluation results and provide detailed analysis.
+Analyze math baseline evaluation results.
 """
 
 import json
@@ -8,11 +8,6 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
 
@@ -59,12 +54,12 @@ def analyze_results(results: List[Dict]) -> Dict:
     return analysis
 
 
-def print_detailed_analysis(analysis: Dict) -> None:
+def print_analysis(analysis: Dict) -> None:
     """Print detailed analysis with examples."""
     
     total = analysis["total_examples"]
     print("\n" + "="*60)
-    print("GSM8K EVALUATION RESULTS ANALYSIS")
+    print("GSM8K BASELINE EVALUATION RESULTS ANALYSIS")
     print("="*60)
     print(f"Total examples: {total}")
     
@@ -92,7 +87,8 @@ def print_detailed_analysis(analysis: Dict) -> None:
         print(f"\nExamples of wrong format responses:")
         for i, example in enumerate(cat3['examples'][:5]):
             print(f"\nExample {i+1}:")
-            print(f"Question: {example['prompt'].split('User: ')[-1].split('\\nAssistant:')[0]}")
+            question = example['prompt'].split('User: ')[-1].split('\nAssistant:')[0]
+            print(f"Question: {question}")
             print(f"Response: {example['response'][:200]}...")
     
     # Analysis of correct format but wrong answer cases
@@ -106,7 +102,8 @@ def print_detailed_analysis(analysis: Dict) -> None:
         print(f"\nExamples of correct format but wrong answer:")
         for i, example in enumerate(cat2['examples'][:5]):
             print(f"\nExample {i+1}:")
-            print(f"Question: {example['prompt'].split('User: ')[-1].split('\\nAssistant:')[0]}")
+            question = example['prompt'].split('User: ')[-1].split('\nAssistant:')[0]
+            print(f"Question: {question}")
             print(f"Response: {example['response'][:200]}...")
             print(f"Ground truth: {example['ground_truth_answer']}")
     
@@ -125,7 +122,7 @@ def print_detailed_analysis(analysis: Dict) -> None:
 def main():
     """Main analysis function."""
     
-    results_path = "gsm8k_baseline_results.jsonl"
+    results_path = "results/gsm8k_baseline_results.jsonl"
     
     if not Path(results_path).exists():
         logger.error(f"Results file {results_path} not found. Please run evaluation first.")
@@ -138,7 +135,7 @@ def main():
     analysis = analyze_results(results)
     
     # Print detailed analysis
-    print_detailed_analysis(analysis)
+    print_analysis(analysis)
 
 
 if __name__ == "__main__":
