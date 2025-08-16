@@ -1,0 +1,19 @@
+# Environment Variables Template
+# Copy this to .env and fill in your values
+
+# Wandb API Key (required for wandb logging)
+WANDB_API_KEY=your_wandb_api_key_here
+
+# Wandb Configuration
+WANDB_PROJECT=cs336-alignment
+WANDB_ENTITY=your-username
+WANDB_NAME=your-run-name
+WANDB_TAGS=alignment,math
+
+# Optional: Override default filesystem paths
+# QWEN_MATH_15B_PATH=/root/autodl-tmp/Qwen/Qwen2.5-Math-1.5B
+# LLAMA_31_8B_PATH=/root/autodl-tmp/LLM-Research/Meta-Llama-3.1-8B
+# RESULTS_DIR=results
+
+# Note: Training parameters (batch_size, learning_rate, etc.) are configured 
+# in the specific method directories (math_sft/, math_grpo/, etc.)
