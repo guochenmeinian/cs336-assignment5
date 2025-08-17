@@ -59,7 +59,7 @@ def print_analysis(analysis: Dict) -> None:
     
     total = analysis["total_examples"]
     print("\n" + "="*60)
-    print("GSM8K BASELINE EVALUATION RESULTS ANALYSIS")
+    print("MATH BASELINE EVALUATION RESULTS ANALYSIS")
     print("="*60)
     print(f"Total examples: {total}")
     
@@ -122,7 +122,7 @@ def print_analysis(analysis: Dict) -> None:
 def main():
     """Main analysis function."""
     
-    results_path = "results/gsm8k_baseline_results.jsonl"
+    results_path = "evaluations/math_baseline.jsonl"
     
     if not Path(results_path).exists():
         logger.error(f"Results file {results_path} not found. Please run evaluation first.")

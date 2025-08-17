@@ -46,14 +46,16 @@ def evaluate_vllm(
     for i, (prompt, gt, output) in enumerate(zip(prompts, ground_truths, outputs)):
         response = output.outputs[0].text.strip()
         
-        # Compute rewards
-        rewards = reward_fn(response, gt)
-        
-        # Extract answer from ground truth (last number after ####)
-        if "####" in gt:
-            gt_answer = gt.split("####")[-1].strip()
+        # Extract answer from ground truth (MATH format: <answer>...</answer>)
+        if "<answer>" in gt and "</answer>" in gt:
+            gt_answer = gt.split("<answer>")[-1].replace("</answer>", "").strip()
         else:
+            # Should never happen
+            # Fallback: use as is (should not happen with our MATH dataset)
             gt_answer = gt
+        
+        # Compute rewards using PURE answer (not full format)
+        rewards = reward_fn(response, gt_answer)
         
         result = {
             "example_id": i,

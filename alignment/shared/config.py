@@ -30,19 +30,21 @@ GSM8K_VALIDATION_PATH = PROJECT_ROOT / "data" / "gsm8k" / "validation.jsonl"
 GSM8K_TEST_PATH = PROJECT_ROOT / "data" / "gsm8k" / "test.jsonl"
 GSM8K_TRAIN_PATH = PROJECT_ROOT / "data" / "gsm8k" / "train.jsonl"
 
-# Converted GSM8K data paths (with <think> format)
-GSM8K_CONVERTED_TRAIN_PATH = PROJECT_ROOT / "data" / "gsm8k_converted" / "train_converted.jsonl"
-GSM8K_CONVERTED_VALIDATION_PATH = PROJECT_ROOT / "data" / "gsm8k_converted" / "validation_converted.jsonl"
-GSM8K_CONVERTED_TEST_PATH = PROJECT_ROOT / "data" / "gsm8k_converted" / "test_converted.jsonl"
+# Math data directory (统一管理)
+MATH_DATA_DIR = PROJECT_ROOT / "data" / "math"
+MATH_TRAIN_PATH = MATH_DATA_DIR / "train.jsonl"
+MATH_VALIDATION_PATH = MATH_DATA_DIR / "validation.jsonl"
+MATH_TEST_PATH = MATH_DATA_DIR / "test.jsonl"
 
-# Results directory (outside the module, as requested)
-RESULTS_DIR = PROJECT_ROOT / "results"
+# Evaluations directory (outside the module, as requested)
+EVALUATIONS_DIR = PROJECT_ROOT / "evaluations"
+
+# Models directory (outside the module, for trained models)
+MODEL_DIR = PROJECT_ROOT / "models"
 
 # Wandb Configuration
 WANDB_PROJECT = get_env("WANDB_PROJECT", "cs336-math")
 WANDB_ENTITY = get_env("WANDB_ENTITY", None)
-WANDB_NAME = get_env("WANDB_NAME", None)
-WANDB_TAGS = get_env("WANDB_TAGS", "alignment").split(",") if get_env("WANDB_TAGS", "") else ["alignment"]
 WANDB_ENABLED = get_env_bool("WANDB_ENABLED", True)
 
 # Default sampling parameters for evaluation
@@ -74,21 +76,6 @@ MODEL_CONFIGS = {
         "dtype": "bfloat16",
         "gpu_memory_utilization": 0.7,
     },
-}
-
-# SFT-specific configurations
-SFT_DEFAULT_CONFIG = {
-    "model_id": "qwen_math_15b",  # 使用MODEL_CONFIGS中的key
-    "lr": 2e-5,
-    "batch_size": 2,
-    "grad_accum": 8,
-    "max_steps": 2000,
-    "max_grad_norm": 1.0,
-    "bf16": True,
-    "amp": False,
-    "use_flash_attention": True,
-    "torch_dtype": "bfloat16",
-    "seed": 42,
 }
 
 # SFT training constants

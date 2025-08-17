@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
 SFT-specific configuration for math alignment experiments.
-Contains only training parameters, model and data paths are in shared config.
+Contains only training parameters, all other configs are in shared config.
 """
 
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional
 
 
 @dataclass
 class SFTConfig:
-    """SFT training configuration - only training parameters."""
+    """SFT training configuration - training parameters + experiment-specific wandb config."""
     
     # Training hyperparameters
     lr: float = 2e-5
@@ -31,11 +31,14 @@ class SFTConfig:
     # Random seed
     seed: int = 42
     
-    # Wandb configuration (inherited from shared config)
+    # Experiment-specific wandb configuration
     wandb_enabled: bool = True
-    wandb_project: Optional[str] = None  # Will use shared config default
-    wandb_name: Optional[str] = None     # Will use shared config default
-    wandb_tags: Optional[List] = None  # Will use shared config default
+    wandb_name: str = "sft_qwen_math_15b"
+    wandb_tags: list = None  # 默认None，会在__post_init__中设置
+    
+    def __post_init__(self):
+        if self.wandb_tags is None:
+            self.wandb_tags = ["sft", "qwen", "math", "15b"]
 
 
 # Default SFT configuration

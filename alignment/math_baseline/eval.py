@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Evaluate Qwen 2.5 Math 1.5B zero-shot performance on MATH/GSM8K dataset.
+Evaluate Qwen 2.5 Math 1.5B zero-shot performance on MATH dataset.
 
 This script implements the requirements from the assignment:
-1. Load MATH/GSM8K validation examples
+1. Load MATH validation examples
 2. Format them as string prompts using the r1_zero prompt
 3. Generate outputs for each example using vLLM
 4. Calculate evaluation metrics using the r1_zero_reward_fn
@@ -14,8 +14,8 @@ import logging
 from pathlib import Path
 
 from ..shared.math_evaluation_utils import evaluate_vllm, load_model
-from ..shared.config import RESULTS_DIR, GSM8K_VALIDATION_PATH, DEFAULT_EVAL_SAMPLING_PARAMS
-from ..shared.math_data_utils import load_gsm8k_data, format_r1_zero_prompt
+from ..shared.config import EVALUATIONS_DIR, MATH_TEST_PATH, DEFAULT_EVAL_SAMPLING_PARAMS
+from ..shared.math_data_utils import load_math_data, format_r1_zero_prompt
 from ..shared.drgrpo_grader import r1_zero_reward_fn
 
 # Configure logging
@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    """Run Qwen 2.5 Math 1.5B zero-shot evaluation on MATH/GSM8K."""
+    """Run Qwen 2.5 Math 1.5B zero-shot evaluation on MATH test dataset."""
     
     # Configuration
     model_name = "qwen_math_15b"
-    validation_data_path = str(GSM8K_VALIDATION_PATH)
-    output_path = RESULTS_DIR / "gsm8k_baseline_results.jsonl"
+    test_data_path = str(MATH_TEST_PATH)
+    output_path = EVALUATIONS_DIR / "math_baseline.jsonl"
     
     # Ensure output directory exists
     output_file = Path(output_path)
@@ -51,23 +51,31 @@ def main():
         logger.error(f"Failed to load model: {e}")
         return False
     
-    # Load validation data
-    logger.info(f"Loading validation data from {validation_data_path}")
-    validation_data = load_gsm8k_data(validation_data_path)
+    # Load test data
+    logger.info(f"Loading test data from {test_data_path}")
+    test_data = load_math_data(test_data_path)
     
     # Format prompts using r1_zero template
     logger.info("Formatting prompts using r1_zero template...")
     prompts = []
     ground_truths = []
     
-    for example in validation_data:
+    for example in test_data:
         question = example["question"]
         answer = example["answer"]
+        
+        # Extract pure answer from <answer>...</answer> format (MATH dataset)
+        if "<answer>" in answer and "</answer>" in answer:
+            pure_answer = answer.split("<answer>")[-1].replace("</answer>", "").strip()
+        else:
+            # This should not happen with our MATH dataset
+            logger.warning(f"Unexpected answer format: {answer[:100]}...")
+            pure_answer = answer
         
         # Format prompt using r1_zero template
         prompt = format_r1_zero_prompt(question)
         prompts.append(prompt)
-        ground_truths.append(answer)
+        ground_truths.append(pure_answer)
     
     logger.info(f"Formatted {len(prompts)} prompts")
     

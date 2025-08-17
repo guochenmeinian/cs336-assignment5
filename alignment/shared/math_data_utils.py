@@ -11,8 +11,8 @@ from typing import List, Dict
 logger = logging.getLogger(__name__)
 
 
-def load_gsm8k_data(data_path: str) -> List[Dict]:
-    """Load GSM8K data from JSONL file."""
+def load_math_data(data_path: str) -> List[Dict]:
+    """Load MATH data from JSONL file."""
     data = []
     with open(data_path, "r", encoding="utf-8") as f:
         for line in f:

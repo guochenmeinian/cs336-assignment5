@@ -10,14 +10,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from .trainer import SFTTrainer, SFTConfig
+from .trainer import SFTTrainer
 from .logger  import log_generations
 
 # Import shared utilities
 from ..shared.config import (
-    RESULTS_DIR, GSM8K_CONVERTED_TRAIN_PATH, GSM8K_CONVERTED_VALIDATION_PATH,
-    WANDB_PROJECT, WANDB_NAME, WANDB_TAGS, WANDB_ENABLED,
-    SFT_DEFAULT_CONFIG, SFT_LOG_EVERY, SFT_EVAL_BATCH_SIZE, SFT_MAX_NEW_TOKENS
+    EVALUATIONS_DIR, MODEL_DIR, MATH_TRAIN_PATH, MATH_VALIDATION_PATH,
+    SFT_LOG_EVERY, SFT_EVAL_BATCH_SIZE, SFT_MAX_NEW_TOKENS
 )
 from ..shared.math_data_utils import format_r1_zero_prompt
 from ..shared.wandb_config import log_evaluation_batch
@@ -53,8 +52,8 @@ def load_jsonl(path: Path)->List[Dict[str,str]]:
                 rows.append(json.loads(line))
     return rows
 
-def convert_gsm8k_to_sft_format(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    """Convert GSM8K format (question/answer) to SFT format (prompt/response)."""
+def convert_math_to_sft_format(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Convert MATH format (question/answer) to SFT format (prompt/response)."""
     converted_rows = []
     for row in rows:
         question = row["question"]
@@ -70,35 +69,38 @@ def convert_gsm8k_to_sft_format(rows: List[Dict[str, str]]) -> List[Dict[str, st
     return converted_rows
 
 def main():
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_dir = RESULTS_DIR / "sft_qwen_math_15b"
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = MODEL_DIR / "sft_qwen_math_15b"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # === 配置 ===
     cfg = SFTConfig(
-        # Use SFT-specific configuration with shared wandb settings
-        wandb_enabled=WANDB_ENABLED,
-        wandb_project=WANDB_PROJECT,
-        wandb_name=WANDB_NAME,
-        wandb_tags=WANDB_TAGS,
-        # Memory optimization
-        use_flash_attention=True,
-        torch_dtype="bfloat16",
-        # Training parameters (can be customized)
+        # 训练参数
+        lr=2e-5,
         batch_size=2,
         grad_accum=8,
         max_steps=2000,
-        lr=2e-5,
+        max_grad_norm=1.0,
+        bf16=True,
+        amp=False,
+        use_flash_attention=True,
+        torch_dtype="bfloat16",
+        seed=42,
+        device="cuda:0",
+        # 实验特定的wandb配置
+        wandb_enabled=True,
+        wandb_name="sft_qwen_math_15b",
+        wandb_tags=["sft", "qwen", "math", "15b"],
     )
 
     # === 数据 ===
-    # 使用转换后的GSM8K数据（<think>格式）
-    train_rows_raw = load_jsonl(GSM8K_CONVERTED_TRAIN_PATH)
-    val_rows_raw = load_jsonl(GSM8K_CONVERTED_VALIDATION_PATH)
+    # 使用MATH数据集（<think>格式）
+    train_rows_raw = load_jsonl(MATH_TRAIN_PATH)
+    val_rows_raw = load_jsonl(MATH_VALIDATION_PATH)
     
     # 转换为SFT格式（prompt/response）
-    train_rows = convert_gsm8k_to_sft_format(train_rows_raw)
-    val_rows = convert_gsm8k_to_sft_format(val_rows_raw)
+    train_rows = convert_math_to_sft_format(train_rows_raw)
+    val_rows = convert_math_to_sft_format(val_rows_raw)
 
     # === 训练器 ===
     trainer = SFTTrainer(cfg)

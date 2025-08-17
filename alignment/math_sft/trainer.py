@@ -26,26 +26,9 @@ from ..shared.wandb_config import (
     log_model_config, finish_wandb
 )
 from ..shared.config import (
-    WANDB_PROJECT, WANDB_NAME, WANDB_TAGS, WANDB_ENABLED,
-    MODEL_CONFIGS, SFT_DEFAULT_CONFIG
+    WANDB_PROJECT, WANDB_ENABLED, WANDB_ENTITY,
+    MODEL_CONFIGS
 )
-
-# 可选：按你给的 shared/log.py 使用配置
-try:
-    from ..shared.log import GenLogConfig  # type: ignore
-except Exception:
-    from dataclasses import dataclass
-    @dataclass
-    class GenLogConfig:
-        every_steps: int = 500
-        max_new_tokens: int = 128
-        batch_size: int = 8
-        do_sample: bool = False
-        temperature: float = 0.0
-        top_p: float = 1.0
-        sample_k: int = 64
-        device: Optional[torch.device] = None
-        to_wandb: bool = False
 
 def set_seed(seed:int):
     random.seed(seed); torch.manual_seed(seed); torch.cuda.manual_seed_all(seed)
@@ -53,25 +36,6 @@ def set_seed(seed:int):
 def ensure_pad(tokenizer):
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token or "<|endoftext|>"
-
-@dataclass
-class SFTConfig:
-    model_id: str = "Qwen/Qwen2.5-Math-1.5B"
-    lr: float = 2e-5
-    batch_size: int = 8
-    grad_accum: int = 4
-    max_steps: int = 2000
-    max_grad_norm: float = 1.0
-    bf16: bool = True
-    amp: bool = False
-    device: str = "cuda:0"
-    seed: int = 42
-    
-    # Wandb configuration
-    wandb_enabled: bool = True
-    wandb_project: str = "cs336-sft"
-    wandb_name: Optional[str] = None
-    wandb_tags: Optional[list] = None
 
 class SFTTrainer:
     """
@@ -86,7 +50,7 @@ class SFTTrainer:
         self._last_nll = 0.0
         
         # Get model configuration from shared config
-        model_key = getattr(cfg, 'model_id', 'qwen_math_15b')
+        model_key = 'qwen_math_15b'  # 默认使用qwen_math_15b
         if model_key not in MODEL_CONFIGS:
             raise ValueError(f"Unknown model: {model_key}. Available: {list(MODEL_CONFIGS.keys())}")
         
@@ -128,20 +92,24 @@ class SFTTrainer:
         
         # Initialize wandb if enabled
         if cfg.wandb_enabled:
+            # 使用cfg中的实验配置 + shared config中的全局配置
             wandb_config = WandbConfig(
-                project=cfg.wandb_project or WANDB_PROJECT,
-                name=cfg.wandb_name or WANDB_NAME,
-                tags=cfg.wandb_tags or WANDB_TAGS,
+                project=WANDB_PROJECT,  # 从shared config获取
+                name=cfg.wandb_name,    # 从cfg获取实验名
+                tags=cfg.wandb_tags,    # 从cfg获取实验标签
+                entity=WANDB_ENTITY,    # 从shared config获取
+                notes=f"SFT training on math dataset with {model_key}",
+                save_code=True,
                 algorithm="sft",
-                dataset="gsm8k",
-                model_name="qwen2.5-math-1.5b",
+                dataset="math",
+                model_name=model_key,
                 enabled=cfg.wandb_enabled
             )
             init_wandb(wandb_config)
             
             # Log model configuration
             config_dict = {
-                "model_id": cfg.model_id,
+                "model_id": model_key,
                 "lr": cfg.lr,
                 "batch_size": cfg.batch_size,
                 "grad_accum": cfg.grad_accum,
@@ -245,7 +213,8 @@ class SFTTrainer:
         
         # Save training configuration
         import json
-        model_config = MODEL_CONFIGS[self.cfg.model_id]
+        model_key = 'qwen_math_15b'  # 默认使用qwen_math_15b
+        model_config = MODEL_CONFIGS[model_key]
         config_dict = {
             "model_config": model_config,  # 使用shared config中的模型配置
             "training_config": {
