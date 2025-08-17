@@ -88,9 +88,10 @@ def log_generations(
     resp_lens = []
     for i, (p, r, gt) in enumerate(zip(prompts, responses, ground_truths)):
         scores = reward_fn(r, gt)
-        total = float(scores["reward"])
-        fmt   = float(scores.get("format_reward", total))
-        ans   = float(scores.get("answer_reward", total))
+        fmt   = float(scores.get("format_reward", 0.0))
+        ans   = float(scores.get("answer_reward", 0.0))
+        # 计算总reward：格式正确且答案正确时为1.0，否则为0.0
+        total = 1.0 if (fmt >= 0.5 and ans >= 0.5) else 0.0
         L = len(tokenizer.encode(r, add_special_tokens=False))
         examples.append({
             "prompt": p,

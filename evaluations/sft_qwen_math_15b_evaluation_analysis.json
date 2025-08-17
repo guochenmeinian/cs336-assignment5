@@ -1,0 +1,16 @@
+{
+  "total_samples": 1000,
+  "format_correct": 992,
+  "answer_correct": 482,
+  "overall_correct": 482,
+  "format_accuracy": 0.992,
+  "answer_accuracy": 0.482,
+  "overall_accuracy": 0.482,
+  "avg_format_score": 0.992,
+  "avg_answer_score": 0.482,
+  "avg_overall_score": 0.482,
+  "format_error_count": 8,
+  "answer_error_count": 518,
+  "format_error_rate": 0.008,
+  "answer_error_rate": 0.518
+}

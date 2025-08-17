@@ -68,11 +68,19 @@ def convert_math_to_sft_format(rows: List[Dict[str, str]]) -> List[Dict[str, str
         })
     return converted_rows
 
-def main():
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    out_dir = MODEL_DIR / "sft_qwen_math_15b"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
+def main(train_path=None, validation_path=None, config_overrides=None, dataset_size=None):
+    """运行SFT训练
+    
+    Args:
+        train_path: 训练数据路径，默认使用MATH_TRAIN_PATH
+        validation_path: 验证数据路径，默认使用MATH_VALIDATION_PATH
+        config_overrides: 配置覆盖字典
+        dataset_size: 训练数据集大小，None表示使用完整数据集
+    """
+    # 使用默认路径或自定义路径
+    train_data_path = train_path or MATH_TRAIN_PATH
+    val_data_path = validation_path or MATH_VALIDATION_PATH
+    
     # === 配置 ===
     cfg = SFTConfig(
         # 训练参数
@@ -92,15 +100,62 @@ def main():
         wandb_name="sft_qwen_math_15b",
         wandb_tags=["sft", "qwen", "math", "15b"],
     )
-
+    
+    # 应用配置覆盖
+    if config_overrides:
+        for key, value in config_overrides.items():
+            if hasattr(cfg, key):
+                setattr(cfg, key, value)
+    
     # === 数据 ===
-    # 使用MATH数据集（<think>格式）
-    train_rows_raw = load_jsonl(MATH_TRAIN_PATH)
-    val_rows_raw = load_jsonl(MATH_VALIDATION_PATH)
+    # 使用指定路径或默认MATH数据集（<think>格式）
+    train_rows_raw = load_jsonl(train_data_path)
+    val_rows_raw = load_jsonl(val_data_path)
+    
+    # 如果指定了数据集大小，创建子集
+    if dataset_size and dataset_size < len(train_rows_raw):
+        import random
+        random.seed(42)  # 固定随机种子
+        indices = random.sample(range(len(train_rows_raw)), dataset_size)
+        train_rows_raw = [train_rows_raw[i] for i in indices]
+        print(f"使用数据集子集: {dataset_size} 个样本")
     
     # 转换为SFT格式（prompt/response）
     train_rows = convert_math_to_sft_format(train_rows_raw)
     val_rows = convert_math_to_sft_format(val_rows_raw)
+    
+    # 根据数据集大小调整max_steps
+    if dataset_size:
+        # 每个样本最多用一次，避免过拟合
+        samples_per_step = cfg.batch_size * cfg.grad_accum
+        cfg.max_steps = max(1, dataset_size // samples_per_step)
+        print(f"根据数据集大小调整max_steps: {cfg.max_steps} (每个样本用1次)")
+    
+    print(f"训练数据: {len(train_rows)} 条")
+    print(f"验证数据: {len(val_rows)} 条")
+    print(f"训练数据路径: {train_data_path}")
+    print(f"验证数据路径: {val_data_path}")
+    print(f"每步处理样本数: {cfg.batch_size} × {cfg.grad_accum} = {cfg.batch_size * cfg.grad_accum}")
+    print(f"总训练样本数: {cfg.max_steps} × {cfg.batch_size * cfg.grad_accum} = {cfg.max_steps * cfg.batch_size * cfg.grad_accum}")
+    
+    # 创建输出目录 - 包含关键参数信息
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # 构建包含参数的目录名
+    base_name = "sft_qwen_math_15b"
+    size_suffix = f"size{len(train_rows)}" if dataset_size else "full"
+    param_suffix = f"lr{cfg.lr:.0e}_bs{cfg.batch_size}_steps{cfg.max_steps}"
+    if cfg.grad_accum != 8:  # 如果不是默认值，也加上
+        param_suffix += f"_ga{cfg.grad_accum}"
+    
+    out_dir = MODEL_DIR / f"{base_name}_{size_suffix}_{param_suffix}"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    # 更新wandb名称，包含参数信息
+    cfg.wandb_name = f"{base_name}_{size_suffix}_{param_suffix}"
+    
+    print(f"输出目录: {out_dir}")
+    print(f"Wandb实验名: {cfg.wandb_name}")
 
     # === 训练器 ===
     trainer = SFTTrainer(cfg)
@@ -116,12 +171,22 @@ def main():
         else:
             sub = val_rows
         prompts = [r["prompt"] for r in sub[:8]]  # 打印太多影响日志清晰，这里取 8 条生成
-        gts     = [r["response"] for r in sub[:8]]
+        
+        # 提取纯答案用于reward计算
+        pure_answers = []
+        for r in sub[:8]:
+            answer = r["response"]
+            if "<answer>" in answer and "</answer>" in answer:
+                pure_answer = answer.split("<answer>")[-1].replace("</answer>", "").strip()
+            else:
+                pure_answer = answer  # fallback
+            pure_answers.append(pure_answer)
+        
         lg = log_generations(
             model=trainer.model,
             tokenizer=trainer.tokenizer,
             prompts=prompts,
-            ground_truths=gts,
+            ground_truths=pure_answers,  # 使用纯答案
             reward_fn=reward_fn,
             max_new_tokens=SFT_MAX_NEW_TOKENS,
             do_sample=False,
