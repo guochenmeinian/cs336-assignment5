@@ -45,7 +45,7 @@ MODEL_DIR = PROJECT_ROOT / "models"
 # Wandb Configuration
 WANDB_PROJECT = get_env("WANDB_PROJECT", "cs336-math")
 WANDB_ENTITY = get_env("WANDB_ENTITY", None)
-WANDB_ENABLED = get_env_bool("WANDB_ENABLED", True)
+WANDB_ENABLED = get_env_bool("WANDB_ENABLED", False)
 
 # Default sampling parameters for evaluation
 DEFAULT_EVAL_SAMPLING_PARAMS = {

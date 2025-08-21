@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Run Expert Iteration on GSM8K dataset.
+Run Expert Iteration on MATH dataset.
 """
 
 import os
@@ -20,7 +20,7 @@ from .trainer import EITrainer
 from .config import EIConfig
 
 # Import shared utilities
-from ..shared.config import RESULTS_DIR, GSM8K_TRAIN_PATH
+from ..shared.config import MODEL_DIR, MATH_TRAIN_PATH
 from ..shared.math_data_utils import format_r1_zero_prompt
 from ..shared.wandb_config import log_metrics, log_generation_examples
 
@@ -55,61 +55,48 @@ def load_jsonl(path: Path) -> List[Dict[str, str]]:
     return rows
 
 
-def convert_gsm8k_to_questions(rows: List[Dict[str, str]]) -> List[str]:
-    """Convert GSM8K format to question list for EI."""
+def convert_math_to_questions_and_answers(rows: List[Dict[str, str]]) -> tuple[List[str], List[str]]:
+    """Convert MATH format to question and answer lists for EI."""
     questions = []
+    answers = []
     for row in rows:
         question = row["question"]
+        answer = row["answer"]
         # Format question using r1_zero template
         formatted_question = format_r1_zero_prompt(question)
         questions.append(formatted_question)
-    return questions
+        answers.append(answer)
+    return questions, answers
 
 
 def main():
-    """Run Expert Iteration on GSM8K dataset."""
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_dir = RESULTS_DIR / "ei_qwen_math_15b"
+    """Run Expert Iteration on MATH dataset."""
+    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = MODEL_DIR / "ei_qwen_math_15b"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # === 配置 ===
-    cfg = EIConfig(
-        # Use shared wandb settings
-        wandb_enabled=True,
-        wandb_project="cs336-ei-math",
-        wandb_name="qwen2.5-math-1.5b-ei",
-        wandb_tags=["ei", "math", "qwen2.5"],
-        # Memory optimization
-        use_flash_attention=True,
-        torch_dtype="bfloat16",
-        # EI parameters
-        n_ei_steps=3,
-        G=8,
-        sampling_temperature=1.0,
-        sampling_max_tokens=512,
-        sampling_min_tokens=4,
-        # Training parameters
-        batch_size=2,
-        grad_accum=8,
-        max_steps=1000,  # Per EI iteration
-        lr=2e-5,
-    )
+    # === Configuration ===
+    # Use default config from math_ei/config.py
+    cfg = EIConfig()
+    
+    # Only override wandb settings
+    cfg.wandb_enabled = False
 
-    # === 数据 ===
-    logger.info("Loading GSM8K training data...")
-    train_rows = load_jsonl(GSM8K_TRAIN_PATH)
-    questions = convert_gsm8k_to_questions(train_rows)
-    logger.info(f"Loaded {len(questions)} questions")
+    # === Data ===
+    logger.info("Loading MATH training data...")
+    train_rows = load_jsonl(MATH_TRAIN_PATH)
+    questions, answers = convert_math_to_questions_and_answers(train_rows)
+    logger.info(f"Loaded {len(questions)} questions and {len(answers)} answers")
 
-    # === 训练器 ===
+    # === Trainer ===
     logger.info("Initializing EI trainer...")
     trainer = EITrainer(cfg)
 
-    # === 运行Expert Iteration ===
+    # === Run Expert Iteration ===
     logger.info("Starting Expert Iteration...")
-    trainer.run_expert_iteration(questions, reward_fn)
+    trainer.run_expert_iteration(questions, answers, reward_fn)
 
-    # === 保存最终权重 ===
+    # === Save final weights ===
     logger.info("Saving final model...")
     trainer.save(str(out_dir))
     logger.info(f"Saved to {out_dir}")

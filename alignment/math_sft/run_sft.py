@@ -68,7 +68,7 @@ def convert_math_to_sft_format(rows: List[Dict[str, str]]) -> List[Dict[str, str
         })
     return converted_rows
 
-def main(train_path=None, validation_path=None, config_overrides=None, dataset_size=None):
+def main(train_path=None, validation_path=None, config_overrides=None, dataset_size=None, max_steps=None):
     """运行SFT训练
     
     Args:
@@ -76,36 +76,28 @@ def main(train_path=None, validation_path=None, config_overrides=None, dataset_s
         validation_path: 验证数据路径，默认使用MATH_VALIDATION_PATH
         config_overrides: 配置覆盖字典
         dataset_size: 训练数据集大小，None表示使用完整数据集
+        max_steps: 最大训练步数，None表示使用config.py中的默认值
     """
     # 使用默认路径或自定义路径
     train_data_path = train_path or MATH_TRAIN_PATH
     val_data_path = validation_path or MATH_VALIDATION_PATH
     
     # === 配置 ===
-    cfg = SFTConfig(
-        # 训练参数
-        lr=2e-5,
-        batch_size=2,
-        grad_accum=8,
-        max_steps=2000,
-        max_grad_norm=1.0,
-        bf16=True,
-        amp=False,
-        use_flash_attention=True,
-        torch_dtype="bfloat16",
-        seed=42,
-        device="cuda:0",
-        # 实验特定的wandb配置
-        wandb_enabled=True,
-        wandb_name="sft_qwen_math_15b",
-        wandb_tags=["sft", "qwen", "math", "15b"],
-    )
+    # 使用config.py中的默认配置
+    cfg = SFTConfig()
     
     # 应用配置覆盖
     if config_overrides:
         for key, value in config_overrides.items():
             if hasattr(cfg, key):
                 setattr(cfg, key, value)
+    
+    # 如果指定了max_steps，直接覆盖
+    if max_steps is not None:
+        cfg.max_steps = max_steps
+        print(f"使用指定的max_steps: {cfg.max_steps}")
+    else:
+        print(f"使用config.py中的默认max_steps: {cfg.max_steps}")
     
     # === 数据 ===
     # 使用指定路径或默认MATH数据集（<think>格式）
@@ -124,19 +116,19 @@ def main(train_path=None, validation_path=None, config_overrides=None, dataset_s
     train_rows = convert_math_to_sft_format(train_rows_raw)
     val_rows = convert_math_to_sft_format(val_rows_raw)
     
-    # 根据数据集大小调整max_steps
-    if dataset_size:
-        # 每个样本最多用一次，避免过拟合
-        samples_per_step = cfg.batch_size * cfg.grad_accum
-        cfg.max_steps = max(1, dataset_size // samples_per_step)
-        print(f"根据数据集大小调整max_steps: {cfg.max_steps} (每个样本用1次)")
+    # 显示训练参数信息
+    effective_batch_size = cfg.batch_size * cfg.grad_accum
+    steps_per_epoch = len(train_rows) / effective_batch_size
+    actual_epochs = cfg.max_steps / steps_per_epoch
     
     print(f"训练数据: {len(train_rows)} 条")
     print(f"验证数据: {len(val_rows)} 条")
     print(f"训练数据路径: {train_data_path}")
     print(f"验证数据路径: {val_data_path}")
-    print(f"每步处理样本数: {cfg.batch_size} × {cfg.grad_accum} = {cfg.batch_size * cfg.grad_accum}")
-    print(f"总训练样本数: {cfg.max_steps} × {cfg.batch_size * cfg.grad_accum} = {cfg.max_steps * cfg.batch_size * cfg.grad_accum}")
+    print(f"每步处理样本数: {cfg.batch_size} × {cfg.grad_accum} = {effective_batch_size}")
+    print(f"每轮步数: {steps_per_epoch:.1f}")
+    print(f"最大训练步数: {cfg.max_steps}")
+    print(f"实际训练轮数: {actual_epochs:.2f}")
     
     # 创建输出目录 - 包含关键参数信息
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,13 +155,22 @@ def main(train_path=None, validation_path=None, config_overrides=None, dataset_s
     # === 训练过程 + in-the-loop 生成日志 ===
     def on_step_log(step:int, scalars:Dict[str,float]):
         logger.info(f"[train] step={step} " + " ".join(f"{k}={v:.4f}" for k,v in scalars.items()))
-        # 抽样验证集做 generation 日志
+        
+        # 固定采样验证集做 generation 日志（解决随机性问题）
         sample_k = 64
         if len(val_rows) > sample_k:
-            idx = random.sample(range(len(val_rows)), sample_k)
-            sub = [val_rows[i] for i in idx]
+            # 使用固定种子确保可复现
+            import random  # 重新导入random模块
+            rng = random.Random(42 + step)  # 基于step的固定种子
+            # 分层采样：确保覆盖整个验证集
+            step_size = len(val_rows) // sample_k
+            indices = [i * step_size + (step % step_size) for i in range(sample_k)]
+            # 确保索引不越界
+            indices = [i % len(val_rows) for i in indices]
+            sub = [val_rows[i] for i in indices]
         else:
             sub = val_rows
+            
         prompts = [r["prompt"] for r in sub[:8]]  # 打印太多影响日志清晰，这里取 8 条生成
         
         # 提取纯答案用于reward计算
@@ -231,5 +232,64 @@ def main(train_path=None, validation_path=None, config_overrides=None, dataset_s
     return True
 
 if __name__ == "__main__":
-    ok = main()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="运行SFT训练")
+    parser.add_argument("--dataset_size", type=int, default=None,
+                       help="训练数据集大小 (128, 256, 512, 1024, 6792)")
+    parser.add_argument("--epochs", type=float, default=None,
+                       help="训练轮数 (自动计算对应的max_steps，向上取整)")
+    parser.add_argument("--lr", type=float, default=None,
+                       help="学习率 (默认使用config.py中的值)")
+    parser.add_argument("--batch_size", type=int, default=None,
+                       help="批量大小 (默认使用config.py中的值)")
+    parser.add_argument("--grad_accum", type=int, default=None,
+                       help="梯度累积步数 (默认使用config.py中的值)")
+    parser.add_argument("--max_steps", type=int, default=None,
+                       help="最大训练步数 (与epochs二选一)")
+    
+    args = parser.parse_args()
+    
+    # 检查参数冲突
+    if args.epochs is not None and args.max_steps is not None:
+        print("❌ 错误: --epochs 和 --max_steps 不能同时指定")
+        print("请选择其中一种方式:")
+        print("  --epochs 1.0     # 自动计算1 epoch对应的步数")
+        print("  --max_steps 425  # 直接指定训练步数")
+        sys.exit(1)
+    
+    # 构建配置覆盖 - 只覆盖非None的参数
+    config_overrides = {}
+    if args.lr is not None:
+        config_overrides['lr'] = args.lr
+    if args.batch_size is not None:
+        config_overrides['batch_size'] = args.batch_size
+    if args.grad_accum is not None:
+        config_overrides['grad_accum'] = args.grad_accum
+    
+    # 如果指定了epochs，计算对应的max_steps（向上取整）
+    calculated_max_steps = None
+    if args.epochs is not None:
+        # 使用默认配置计算
+        temp_cfg = SFTConfig()
+        effective_batch_size = (args.batch_size or temp_cfg.batch_size) * (args.grad_accum or temp_cfg.grad_accum)
+        if args.dataset_size:
+            steps_per_epoch = args.dataset_size / effective_batch_size
+            # 向上取整，确保实际步数 >= 目标epoch数
+            target_steps = steps_per_epoch * args.epochs
+            calculated_max_steps = max(1, int(target_steps + 0.99))  # 向上取整，最小1步
+            actual_epochs = calculated_max_steps / steps_per_epoch
+            print(f"根据epochs={args.epochs}计算:")
+            print(f"  每轮步数: {steps_per_epoch:.1f}")
+            print(f"  目标步数: {target_steps:.1f}")
+            print(f"  向上取整后: {calculated_max_steps}")
+            print(f"  实际轮数: {actual_epochs:.2f}")
+    
+    ok = main(
+        train_path=None,
+        validation_path=None,
+        config_overrides=config_overrides,
+        dataset_size=args.dataset_size,
+        max_steps=calculated_max_steps or args.max_steps
+    )
     raise SystemExit(0 if ok else 1)

@@ -22,12 +22,19 @@ logger = logging.getLogger(__name__)
 def evaluate_model(model_path: str, output_name: str = None):
     """评估指定路径的模型"""
     
-    # 如果没有指定输出名称，使用模型路径的最后一部分
+    # 如果没有指定输出名称，自动生成包含模型信息的名称
     if output_name is None:
-        output_name = Path(model_path).name
+        model_path_obj = Path(model_path)
+        # 提取模型目录名，去掉可能的policy后缀
+        model_dir_name = model_path_obj.name
+        if model_dir_name == "policy":
+            model_dir_name = model_path_obj.parent.name
+        
+        # 生成描述性的输出名称
+        output_name = f"{model_dir_name}_evaluation"
     
     # 输出路径
-    output_path = EVALUATIONS_DIR / f"{output_name}_evaluation.jsonl"
+    output_path = EVALUATIONS_DIR / f"{output_name}.jsonl"
     
     # 确保输出目录存在
     output_file = Path(output_path)
@@ -57,6 +64,9 @@ def evaluate_model(model_path: str, output_name: str = None):
             logger.info("预训练模型加载成功")
     except Exception as e:
         logger.error(f"模型加载失败: {e}")
+        logger.error(f"请检查模型路径: {model_path}")
+        logger.error("SFT模型通常保存在: models/sft_xxx/policy/ 目录下")
+        logger.error("请使用完整路径，例如: models/sft_qwen_math_15b_size128_lr2e-05_bs2_steps100/policy")
         return False
     
     # 加载测试数据

@@ -147,7 +147,7 @@ def run_compute_group_normalized_rewards(
         group_rewards = raw_rewards[start:end]
         group_mean = group_rewards.mean()
         if normalize_by_std:
-            group_std = group_rewards.std(unbiased=False)
+            group_std = group_rewards.std(unbiased=True)
             denom = group_std + advantage_eps
             normalized[start:end] = (group_rewards - group_mean) / denom
         else:
@@ -155,7 +155,7 @@ def run_compute_group_normalized_rewards(
 
     metadata: dict[str, float] = {
         "reward_mean": float(raw_rewards.mean().item()),
-        "reward_std": float(raw_rewards.std(unbiased=False).item()),
+        "reward_std": float(raw_rewards.std(unbiased=True).item()),
         "format_reward_mean": float(torch.tensor(format_rewards_list).mean().item()),
         "answer_reward_mean": float(torch.tensor(answer_rewards_list).mean().item()),
     }
@@ -270,14 +270,15 @@ def run_compute_grpo_clip_loss(
             dict[str, torch.Tensor]: metadata for the GRPO-Clip loss 
                 (used to compute clip fraction).
     """
+    # Expand advantages to match sequence length for broadcasting
+    advantages_expanded = advantages.expand(-1, policy_log_probs.shape[1])
+    
     # Ratio between current and old policy
     ratio = torch.exp(policy_log_probs - old_log_probs)
-    # Broadcast advantages across sequence length
-    advantages_broadcast = advantages
     # Unclipped and clipped objectives
-    unclipped = ratio * advantages_broadcast
+    unclipped = ratio * advantages_expanded
     clipped_ratio = torch.clamp(ratio, 1.0 - cliprange, 1.0 + cliprange)
-    clipped = clipped_ratio * advantages_broadcast
+    clipped = clipped_ratio * advantages_expanded
     # PPO-style clipped objective: take the minimum, negate to form a loss we minimize
     per_token_loss = -torch.minimum(unclipped, clipped)
 

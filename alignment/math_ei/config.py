@@ -11,7 +11,7 @@ from typing import Optional, List
 class EIConfig:
     """Expert Iteration configuration."""
     
-    # Model configuration
+    # Model configuration - use shared config path
     model_id: str = "/root/autodl-tmp/Qwen/Qwen2.5-Math-1.5B"
     
     # Training hyperparameters
@@ -31,15 +31,22 @@ class EIConfig:
     torch_dtype: str = "bfloat16"
     
     # Expert Iteration specific
-    n_ei_steps: int = 3  # Number of EI iterations
+    n_ei_steps: int = 5  # Number of EI iterations per experiment
     G: int = 8  # Number of samples per question
     sampling_temperature: float = 1.0
-    sampling_max_tokens: int = 512
+    sampling_max_tokens: int = 1024
     sampling_min_tokens: int = 4  # Prevent empty strings
     seed: int = 42
     
+    # vLLM sampling parameters
+    sampling_top_p: float = 1.0
+    sampling_stop: List[str] = None  # Will be set to ["</answer>"]
+    
+    # Batch size for this experiment: [512, 1024, 2048]
+    experiment_batch_size: int = 512
+    
     # Wandb configuration
-    wandb_enabled: bool = True
+    wandb_enabled: bool = False
     wandb_project: Optional[str] = None
     wandb_name: Optional[str] = None
     wandb_tags: Optional[List[str]] = None
@@ -47,6 +54,10 @@ class EIConfig:
 
 # Default EI configuration
 DEFAULT_EI_CONFIG = EIConfig()
+
+# Set default values for lists
+if DEFAULT_EI_CONFIG.sampling_stop is None:
+    DEFAULT_EI_CONFIG.sampling_stop = ["</answer>"]
 
 # Training constants
 LOG_EVERY = 50
